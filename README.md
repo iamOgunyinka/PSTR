@@ -6,7 +6,7 @@ PSTR is an abbreviation for PRESENTER(sounds awkward, huh?). PRESENTER is a util
 What's been done so far?
 ========================
 As at Thursday(30th January 2014).
-I've finished with the command-line parser(CLP) and with getting all text files out of a given folder(recursively down the directory). The CLP source code is attributed to Théophile BASTIAN (a.k.a. Tobast), on his wonderful work on the CLI of pastebin source code. The FileHandler code handles the names of all the files in a given directory.
+I've finished with the command-line parser(CLP) and with getting all text files out of a given folder(recursively down the directory). The CLP source code is attributed to Théophile BASTIAN (a.k.a. Tobast), on his wonderful work on the CLI of pastebin source code. The FileHandler code handles the names of all the files in a given directory. Sample video can be found [here](http://www.youtube.com/watch?v=Hds5bytY6qw)
 
 Platform
 ========
