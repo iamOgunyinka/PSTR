@@ -89,6 +89,7 @@ std::vector<std::string> FileHandler::getExtension(std::string ext)
 	auto partition = std::stable_partition(temp.begin(), temp.end(),
 			[=](std::string s)->bool{ return s.find(ext) != std::string::npos; } );
 	temp.erase(partition, temp.end());
+
 	return temp;
 }
 
