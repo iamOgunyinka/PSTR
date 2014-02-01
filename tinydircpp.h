@@ -2,12 +2,12 @@
 #define TINYDIRCPP_H
 
 #include <string>
-#include <memory>
 #include <algorithm>
 #include <errno.h>
 
-#ifdef WIN32
-#define WIN32_LEAN_AND_MEAN
+//According to the msdn documentation, _WIN32 is defined for both 32- and 64bit machines
+#ifdef _WIN32
+#define _WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #pragma warning (disable : 4996)
 #else
@@ -15,8 +15,15 @@
 #include <sys/stat.h>
 #endif
 
+
+#ifdef _WIN32
+#define SLASH "\\"
+#else
+#define SLASH "/"
+#endif
+
 constexpr unsigned int TINYDIR_PATH_MAX = 4096;
-#ifdef WIN32
+#ifdef _WIN32
 constexpr unsigned int TINYDIR_PATH_EXTRA = 2;
 #else
 constexpr unsigned int TINYDIR_PATH_EXTRA = 0;
@@ -37,16 +44,18 @@ struct tinydir_file
 		this->name = rhs.name;
 		this->is_dir = rhs.is_dir;
 		this->is_reg = rhs.is_reg;
-#ifndef WIN32
+#ifdef _WIN32
+#else
         this->s = rhs.s;
 #endif
 		return *this;
 	}
-#ifndef WIN32
+#ifdef _WIN32
+#else
     struct stat s;
 #endif
 };
-
+//Used for sorting the elements of "files" in tinydir_dir struct
 bool operator<(const tinydir_file &a, const tinydir_file &b){
 	return a.name < b.name;
 }
@@ -59,9 +68,9 @@ struct tinydir_dir
 	std::string path;
 	bool has_next;
 	size_t n_files;
-	std::unique_ptr<tinydir_file[]> files;
-	
-#ifdef WIN32
+	std::vector<tinydir_file> files;
+
+#ifdef _WIN32
     HANDLE h;
     WIN32_FIND_DATA f;
 #else
@@ -93,9 +102,9 @@ static inline int tinydir_open(tinydir_dir *dir, const std::string &fileName)
 		return -1;
 	}
 
-	dir->files = nullptr;
+	(dir->files).clear();
 
-#ifdef WIN32
+#ifdef _WIN32
 	dir->h = INVALID_HANDLE_VALUE;
 #else
 	dir->d = nullptr;
@@ -103,9 +112,9 @@ static inline int tinydir_open(tinydir_dir *dir, const std::string &fileName)
 	tinydir_close(dir);
 
 	dir->path = fileName;
-#ifdef WIN32
-	*(dir).path += std::string("\\*");
-	dir->h = FindFirstFile((dir->path).c_str(), &dir->f);
+#ifdef _WIN32
+	dir->path += std::string("\\*");
+	dir->h = FindFirstFile((dir->path).c_str(), &(dir->f));
 	dir->path[(dir->path).size() - 2] = '\0';
 	if (dir->h == INVALID_HANDLE_VALUE)
 #else
@@ -120,7 +129,7 @@ static inline int tinydir_open(tinydir_dir *dir, const std::string &fileName)
 
 	/* read first file */
 	dir->has_next = true;
-#ifndef WIN32
+#ifndef _WIN32
 	dir->e = readdir(dir->d);
 	if (dir->e == nullptr)
 	{
@@ -156,10 +165,8 @@ static inline int tinydir_open_sorted(tinydir_dir *dir, const std::string &fileN
 	}
 
 	dir->n_files = 0;
-	std::unique_ptr<tinydir_file[]> temp(new tinydir_file [n_files]);
-	(dir->files).reset(temp.release());
-	temp = nullptr;
-	if (dir->files == nullptr)
+	dir->files.resize(n_files);
+	if (dir->files.size() == 0)
 	{
 		errno = ENOMEM;
 		bail(dir);
@@ -170,7 +177,7 @@ static inline int tinydir_open_sorted(tinydir_dir *dir, const std::string &fileN
 		tinydir_file *p_file = nullptr;
 		dir->n_files++;
 
-		p_file = &dir->files[dir->n_files - 1];
+		p_file = &(dir->files[(dir->n_files) - 1]);
 		if (tinydir_readfile(dir, p_file) == -1)
 		{
 			bail(dir);
@@ -190,8 +197,8 @@ static inline int tinydir_open_sorted(tinydir_dir *dir, const std::string &fileN
 			break;
 		}
 	}
-	
-	std::sort((dir->files).get(), (dir->files).get() + n_files);
+
+	std::sort((dir->files).begin(), (dir->files).end());
 	return 0;
 }
 
@@ -204,12 +211,11 @@ static inline void tinydir_close(tinydir_dir *dir)
 	dir->path = "";
 	dir->has_next = false;
 	dir->n_files = false;
-	if (dir->files != nullptr)
+	if ((dir->files).size() != 0)
 	{
-		dir->files.reset();
+		dir->files.clear();
 	}
-	dir->files = nullptr;
-#ifdef WIN32
+#ifdef _WIN32
 	if (dir->h != INVALID_HANDLE_VALUE)
 	{
 		FindClose(dir->h);
@@ -238,7 +244,7 @@ static inline int tinydir_next(tinydir_dir *dir)
 		return -1;
 	}
 
-#ifdef WIN32
+#ifdef _WIN32
 	if (FindNextFile(dir->h, &dir->f) == 0)
 #else
 	dir->e = readdir(dir->d);
@@ -246,7 +252,7 @@ static inline int tinydir_next(tinydir_dir *dir)
 #endif
 	{
 		dir->has_next = false;
-#ifdef WIN32
+#ifdef _WIN32
 		if (GetLastError() != ERROR_SUCCESS &&
 			GetLastError() != ERROR_NO_MORE_FILES)
 		{
@@ -271,7 +277,7 @@ static inline int tinydir_readfile(const tinydir_dir *dir, tinydir_file *file)
 		errno = EINVAL;
 		return -1;
 	}
-#ifdef WIN32
+#ifdef _WIN32
 	if (dir->h == INVALID_HANDLE_VALUE)
 #else
 	if (dir->e == nullptr)
@@ -282,7 +288,7 @@ static inline int tinydir_readfile(const tinydir_dir *dir, tinydir_file *file)
 	}
 	if ((dir->path).size() +
 		std::string(
-#ifdef WIN32
+#ifdef _WIN32
 			dir->f.cFileName
 #else
 			dir->e->d_name
@@ -295,7 +301,7 @@ static inline int tinydir_readfile(const tinydir_dir *dir, tinydir_file *file)
 		return -1;
 	}
 	if (std::string(
-#ifdef WIN32
+#ifdef _WIN32
 			dir->f.cFileName
 #else
 			dir->e->d_name
@@ -305,32 +311,32 @@ static inline int tinydir_readfile(const tinydir_dir *dir, tinydir_file *file)
 		errno = ENAMETOOLONG;
 		return -1;
 	}
-	
-	file->path = dir->path;
-	file->path += std::string("/");
 
-	file->name += std::string(
-#ifdef WIN32
+	file->path = dir->path;
+	file->path += std::string(SLASH);
+
+	file->name = std::string(
+#ifdef _WIN32
 		dir->f.cFileName
 #else
 		dir->e->d_name
 #endif
 	);
 	file->path += file->name;
-#ifndef WIN32
+#ifndef _WIN32
 	if (stat((file->path).c_str(), &file->s) == -1)
 	{
 		return -1;
 	}
 #endif
 	file->is_dir =
-#ifdef WIN32
+#ifdef _WIN32
 		!!(dir->f.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
 #else
 		S_ISDIR(file->s.st_mode);
 #endif
 	file->is_reg =
-#ifdef WIN32
+#ifdef _WIN32
 		!!(dir->f.dwFileAttributes & FILE_ATTRIBUTE_NORMAL) ||
 		(
 			!(dir->f.dwFileAttributes & FILE_ATTRIBUTE_DEVICE) &&
@@ -363,9 +369,9 @@ static inline int tinydir_readfile_n(const tinydir_dir *dir, tinydir_file *file,
 		errno = ENOENT;
 		return -1;
 	}
-	
+
 	*file = (dir->files)[i];
-	
+
 	return 0;
 }
 
@@ -389,7 +395,7 @@ static inline int tinydir_open_subdir_n(tinydir_dir *dir, size_t i)
 	{
 		return -1;
 	}
-	
+
 	return 0;
 }
 
